@@ -1,0 +1,6 @@
+# skillshare-managed symlink dirs (source of truth is .skillshare/skills/)
+.claude/skills/
+.gemini/skills/
+.opencode/skills/
+.crush/skills/
+.github/skills/

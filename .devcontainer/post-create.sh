@@ -4,6 +4,10 @@ set -e
 mkdir -p ~/.ssh && ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N '' 2>/dev/null || true
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
+# ─── skillshare ───────────────────────────────────────────────────────────────
+curl -fsSL https://raw.githubusercontent.com/runkids/skillshare/main/install.sh | sh
+skillshare sync
+
 # ─── MCP Servers ──────────────────────────────────────────────────────────────
 # MCP configs are now checked in to the repo:
 # - .copilot/mcp-config.json (GitHub Copilot CLI)
