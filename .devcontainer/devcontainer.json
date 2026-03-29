@@ -1,0 +1,25 @@
+{
+  "name": "Dolt DB Tools",
+  "image": "ghcr.io/calvinw/ai-course-devcontainer:latest",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "containerEnv": {
+    "CLAUDE_CODE_DISABLE_VSCODE_EXTENSION": "1"
+  },
+  "customizations": {
+    "codespaces": {
+      "openFiles": []
+    },
+    "vscode": {
+      "extensions": [],
+      "settings": {
+        "extensions.allowed": {
+          "anthropic.claude-code": false,
+          "*": true
+        },
+        "chat.agent.enabled": false,
+        "terminal.integrated.copyOnSelection": true,
+        "terminal.integrated.rightClickBehavior": "paste"
+      }
+    }
+  }
+}
