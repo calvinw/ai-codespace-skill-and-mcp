@@ -10,29 +10,7 @@ mkdir -p ~/.ssh && ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N '' 2>/dev/null 
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
 # ─── skillshare ───────────────────────────────────────────────────────────────
-curl -fsSL https://raw.githubusercontent.com/runkids/skillshare/main/install.sh | sh
-skillshare sync
-
-# Skillshare sync creates repo-local targets such as .agents/skills, but Codex
-# discovers user skills from ~/.codex/skills. Install these symlinks even if the
-# Codex CLI is not present yet; the agent may be installed later.
-mkdir -p ~/.codex/skills
-for skill_dir in "$WORKSPACE_DIR"/.skillshare/skills/*; do
-  [ -d "$skill_dir" ] || continue
-  skill_name="$(basename "$skill_dir")"
-  target="$HOME/.codex/skills/$skill_name"
-
-  if [ -L "$target" ] && [ "$(readlink -f "$target")" = "$(readlink -f "$skill_dir")" ]; then
-    continue
-  fi
-
-  if [ -e "$target" ] && [ ! -L "$target" ]; then
-    echo "Skipping Codex skill install for $skill_name; $target already exists and is not a symlink."
-    continue
-  fi
-
-  ln -sfn "$skill_dir" "$target"
-done
+bash "$WORKSPACE_DIR/scripts/sync-skills.sh"
 
 # ─── MCP Servers ──────────────────────────────────────────────────────────────
 # MCP configs are checked in to the repo:
@@ -62,13 +40,15 @@ if command -v jq >/dev/null 2>&1 && command -v claude >/dev/null 2>&1; then
   fi
 fi
 
-# Register Codex MCP servers from .claude/settings.json into ~/.codex/config.toml
-if command -v jq >/dev/null 2>&1 && command -v codex >/dev/null 2>&1; then
+# Register Codex MCP servers from .claude/settings.json into ~/.codex/config.toml.
+# These MCP servers expose legacy SSE endpoints; current Codex CLI `--url` support
+# is streamable HTTP only, so register them through Supergateway as stdio servers.
+if command -v jq >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && command -v npx >/dev/null 2>&1; then
   SETTINGS="$WORKSPACE_DIR/.claude/settings.json"
   if [ -f "$SETTINGS" ]; then
     jq -r '.mcpServers | to_entries[] | "\(.key) \(.value.url)"' "$SETTINGS" | \
     while IFS=' ' read -r name url; do
-      codex mcp add "$name" --url "$url" 2>/dev/null || true
+      codex mcp add "$name" -- npx -y supergateway --sse "$url" --logLevel none 2>/dev/null || true
     done
   fi
 fi
