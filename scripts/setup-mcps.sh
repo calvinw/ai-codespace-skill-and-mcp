@@ -7,6 +7,8 @@ WORKSPACE_DIR="${WORKSPACE_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 cd "$WORKSPACE_DIR"
 
 CONFIGS="$WORKSPACE_DIR/configs/mcp"
+CODEX_MCP_BRIDGE_DIR="$WORKSPACE_DIR/.codex-tools/supergateway"
+CODEX_MCP_BRIDGE_BIN="$CODEX_MCP_BRIDGE_DIR/node_modules/.bin/supergateway"
 
 # ─── Create workspace tool dirs and symlink MCP configs into them ─────────────
 # Source-of-truth configs live in configs/mcp/; these dirs are generated at
@@ -45,13 +47,31 @@ fi
 
 # Register Codex MCP servers from configs/mcp/claude-settings.json into ~/.codex/config.toml.
 # These MCP servers expose legacy SSE endpoints; current Codex CLI `--url` support
-# is streamable HTTP only, so register them through Supergateway as stdio servers.
-if command -v jq >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && command -v npx >/dev/null 2>&1; then
+# is streamable HTTP only, so register them through a pinned local Supergateway
+# install as stdio servers rather than relying on transient `npx` caches.
+if command -v jq >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+  if [ ! -x "$CODEX_MCP_BRIDGE_BIN" ]; then
+    mkdir -p "$CODEX_MCP_BRIDGE_DIR"
+    if [ ! -f "$CODEX_MCP_BRIDGE_DIR/package.json" ]; then
+      cat > "$CODEX_MCP_BRIDGE_DIR/package.json" <<'EOF'
+{
+  "name": "codex-mcp-bridge",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "supergateway": "3.4.3"
+  }
+}
+EOF
+    fi
+    npm install --prefix "$CODEX_MCP_BRIDGE_DIR" >/dev/null 2>&1
+  fi
+
   SETTINGS="$CONFIGS/claude-settings.json"
   if [ -f "$SETTINGS" ]; then
     jq -r '.mcpServers | to_entries[] | "\(.key) \(.value.url)"' "$SETTINGS" | \
     while IFS=' ' read -r name url; do
-      codex mcp add "$name" -- npx -y supergateway --sse "$url" --logLevel none 2>/dev/null || true
+      codex mcp add "$name" -- "$CODEX_MCP_BRIDGE_BIN" --sse "$url" --logLevel none 2>/dev/null || true
     done
   fi
 fi

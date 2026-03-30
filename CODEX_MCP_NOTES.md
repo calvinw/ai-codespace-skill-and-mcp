@@ -16,31 +16,38 @@ Current Codex CLI (`codex-cli 0.117.0`) cannot. Its `codex mcp add --url ...` pa
 
 ## Fix
 
-Codex now registers these servers through `supergateway` as local stdio MCP servers.
+Codex should register these servers through a pinned local `supergateway`
+install as stdio MCP servers.
+
+Using `npx -y supergateway ...` can fail if the transient npm cache contains an
+incomplete install. A workspace-local install avoids that failure mode.
 
 The working command shape is:
 
 ```bash
-codex mcp add NAME -- npx -y supergateway --sse URL --logLevel none
+/workspaces/bus-mgmt-benchmarks-dolt-db/.codex-tools/supergateway/node_modules/.bin/supergateway --sse URL --logLevel none
 ```
 
 ## post-create.sh Change
 
-[`post-create.sh`](/workspaces/bus-mgmt-benchmarks-dolt-db/.devcontainer/post-create.sh) was updated so the Codex section now installs:
+[`scripts/setup-mcps.sh`](/workspaces/bus-mgmt-benchmarks-dolt-db/scripts/setup-mcps.sh) now:
 
 ```bash
-codex mcp add "$name" -- npx -y supergateway --sse "$url" --logLevel none
+mkdir -p "$WORKSPACE_DIR/.codex-tools/supergateway"
+npm install --prefix "$WORKSPACE_DIR/.codex-tools/supergateway"
+codex mcp add "$name" -- "$WORKSPACE_DIR/.codex-tools/supergateway/node_modules/.bin/supergateway" --sse "$url" --logLevel none
 ```
 
 instead of:
 
 ```bash
-codex mcp add "$name" --url "$url"
+codex mcp add "$name" -- npx -y supergateway --sse "$url" --logLevel none
 ```
 
 ## Expected Result
 
-After setup, `codex mcp list` should show command-based entries for all three MCPs:
+After setup, `codex mcp list` should show local command-based entries for all
+three MCPs:
 
 - `dolt`
 - `mcp-sec-10ks`
@@ -49,9 +56,9 @@ After setup, `codex mcp list` should show command-based entries for all three MC
 Example:
 
 ```text
-dolt               npx -y supergateway --sse https://bus-mgmt-databases.mcp.mathplosion.com/mcp-dolt-database/sse --logLevel none
-mcp-sec-10ks       npx -y supergateway --sse https://bus-mgmt-databases.mcp.mathplosion.com/mcp-sec-10ks/sse --logLevel none
-mcp-yfinance-10ks  npx -y supergateway --sse https://bus-mgmt-databases.mcp.mathplosion.com/mcp-yfinance-10ks/sse --logLevel none
+dolt               /workspaces/bus-mgmt-benchmarks-dolt-db/.codex-tools/supergateway/node_modules/.bin/supergateway --sse https://bus-mgmt-databases.mcp.mathplosion.com/mcp-dolt-database/sse --logLevel none
+mcp-sec-10ks       /workspaces/bus-mgmt-benchmarks-dolt-db/.codex-tools/supergateway/node_modules/.bin/supergateway --sse https://bus-mgmt-databases.mcp.mathplosion.com/mcp-sec-10ks/sse --logLevel none
+mcp-yfinance-10ks  /workspaces/bus-mgmt-benchmarks-dolt-db/.codex-tools/supergateway/node_modules/.bin/supergateway --sse https://bus-mgmt-databases.mcp.mathplosion.com/mcp-yfinance-10ks/sse --logLevel none
 ```
 
 ## After Reboot
@@ -63,7 +70,8 @@ bash .devcontainer/post-create.sh
 codex mcp list
 ```
 
-If the list still shows `Url` entries pointing directly at `/sse`, the old broken registration path is still present somewhere.
+If the list still shows `npx -y supergateway ...`, the older transient install
+path is still present somewhere.
 
 If needed, remove and re-add them manually:
 
@@ -72,7 +80,7 @@ codex mcp remove dolt
 codex mcp remove mcp-sec-10ks
 codex mcp remove mcp-yfinance-10ks
 
-codex mcp add dolt -- npx -y supergateway --sse https://bus-mgmt-databases.mcp.mathplosion.com/mcp-dolt-database/sse --logLevel none
-codex mcp add mcp-sec-10ks -- npx -y supergateway --sse https://bus-mgmt-databases.mcp.mathplosion.com/mcp-sec-10ks/sse --logLevel none
-codex mcp add mcp-yfinance-10ks -- npx -y supergateway --sse https://bus-mgmt-databases.mcp.mathplosion.com/mcp-yfinance-10ks/sse --logLevel none
+codex mcp add dolt -- /workspaces/bus-mgmt-benchmarks-dolt-db/.codex-tools/supergateway/node_modules/.bin/supergateway --sse https://bus-mgmt-databases.mcp.mathplosion.com/mcp-dolt-database/sse --logLevel none
+codex mcp add mcp-sec-10ks -- /workspaces/bus-mgmt-benchmarks-dolt-db/.codex-tools/supergateway/node_modules/.bin/supergateway --sse https://bus-mgmt-databases.mcp.mathplosion.com/mcp-sec-10ks/sse --logLevel none
+codex mcp add mcp-yfinance-10ks -- /workspaces/bus-mgmt-benchmarks-dolt-db/.codex-tools/supergateway/node_modules/.bin/supergateway --sse https://bus-mgmt-databases.mcp.mathplosion.com/mcp-yfinance-10ks/sse --logLevel none
 ```
