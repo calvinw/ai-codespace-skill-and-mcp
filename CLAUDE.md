@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code when working in this repository.
 
+> **Technical reference:** For database schema, MCP servers, anomaly detection rules, file layout, and all other technical details, see [AGENTS.md](AGENTS.md).
+
 ## Overview
 
 This codespace is used to collect, verify, and load financial data for the BusMgmtBenchmarks project. The main tasks are:

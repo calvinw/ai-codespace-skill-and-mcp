@@ -2,6 +2,8 @@
 
 This document helps agents work effectively in the `bus-mgmt-benchmarks-dolt-db` repository.
 
+> **Student communication:** Claude Code reads [CLAUDE.md](CLAUDE.md) automatically for tone, communication style, and student-facing behavior rules. All agents working with students should read that file too.
+
 ## Project Overview
 
 **BusMgmtBenchmarks** is a financial benchmarking database for retail companies, hosted as a Dolt database at [DoltHub](https://www.dolthub.com/). This repository is a GitHub Codespace setup that provides:
