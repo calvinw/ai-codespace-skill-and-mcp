@@ -53,11 +53,12 @@ For each company compute the following. All percentages should be rounded to two
 
 | Metric | Formula |
 |--------|---------|
+| SGA % of Revenue | SGA ÷ Net Revenue × 100 |
 | Net Profit Margin % | Net Profit ÷ Net Revenue × 100 |
 | Asset Turnover | Net Revenue ÷ Total Assets |
 | ROA % | Net Profit Margin % × Asset Turnover |
 
-Note: ROA % = Net Profit ÷ Total Assets × 100 (the DuPont product is equivalent).
+Note: ROA % = Net Profit ÷ Total Assets × 100 (the DuPont product is equivalent). SGA is not part of the DuPont formula directly, but it affects ROA indirectly by reducing operating profit and net profit margin.
 
 ## Step 4 — Display side-by-side comparison table
 
@@ -71,6 +72,7 @@ Present a clear table with both companies in columns. Use the display_name from 
 | Cost of Goods | | |
 | Gross Margin | | |
 | SGA | | |
+| SGA % of Revenue | | |
 | Operating Profit | | |
 | Net Profit | | |
 | Total Assets | | |
@@ -90,6 +92,7 @@ After the tables, write a short plain-English interpretation (3–5 sentences) c
 1. Which company has a higher ROA and what that means overall
 2. Which company is more profitable per dollar of sales (higher Net Profit Margin %)
 3. Which company uses its assets more efficiently (higher Asset Turnover)
-4. What the DuPont breakdown reveals about each company's business model — for example, a discount retailer like Walmart typically has low margins but very high asset turnover, while a department store like Macy's may have higher margins but lower turnover
+4. How SG&A % of Revenue helps explain how much gross margin is consumed by operating costs
+5. What the DuPont breakdown reveals about each company's business model — for example, a discount retailer like Walmart typically has low margins but very high asset turnover, while a department store like Macy's may have higher margins but lower turnover
 
 Keep the interpretation in plain English suitable for a business student with no finance background.
