@@ -1,192 +1,190 @@
-# AGENTS.md — Working in BusMgmtBenchmarks
+# AGENTS.md — Working in ai-codespace-skill-and-mcp
 
-This document helps agents work effectively in the `bus-mgmt-benchmarks-dolt-db` repository.
+This document is the technical reference for agents working in this repository.
 
-> **Student communication:** Claude Code reads [CLAUDE.md](CLAUDE.md) automatically for tone, communication style, and student-facing behavior rules. All agents working with students should read that file too.
+> **Student communication:** Claude Code reads [CLAUDE.md](CLAUDE.md) automatically for tone and student-facing behavior rules. All agents working with students should read that file too.
 
 ## Project Overview
 
-**BusMgmtBenchmarks** is a financial benchmarking database for retail companies, hosted as a Dolt database at [DoltHub](https://www.dolthub.com/). This repository is a GitHub Codespace setup that provides:
+This repository is a minimal working template for a GitHub Codespace that:
 
-1. **Dolt Database Access** — Read/write to `calvinw/BusMgmtBenchmarks/main` via MCP (Model Context Protocol)
-2. **Financial Data Pipeline** — Two AI skills to fetch, validate, and insert financial data for retail companies
-3. **Multi-Tool Support** — All AI tools (Claude Code, OpenCode, Gemini CLI, Copilot, Crush, Codex) are bootstrapped by per-tool setup scripts using a shared MCP URL list
+1. **Connects every AI tool to a remote MCP server** — via a single shared config file (`configs/mcp-urls.conf`) that all setup scripts read
+2. **Pre-loads a skill across all tools** — via `.skillshare/` so any AI tool can run `/roa-analysis`
+3. **Boots automatically** — `.devcontainer/post-create.sh` runs all setup on Codespace start
 
-**Key URLs:**
-- Dolt database: `https://www.dolthub.com/repositories/calvinw/BusMgmtBenchmarks`
-- MCP server: `https://bus-mgmt-databases.mcp.mathplosion.com/mcp-dolt-database/sse`
-- Report publication: `https://calvinw.github.io/BusMgmtBenchmarks/reports/`
+The design goal is simplicity: one MCP, one skill, all tools wired up from a single source of truth.
 
 ---
 
-## MCP Servers & Tools
+## MCP Server
 
-All AI tools connect to MCP servers defined in `configs/mcp-urls.conf`:
+All AI tools connect to the MCP server defined in `configs/mcp-urls.conf`:
 
-| Server | Purpose |
-|--------|---------|
-| **dolt** | Read/write Dolt database tables |
-| **mcp-yfinance-10ks** | Fetch financial statements from Yahoo Finance |
-| **mcp-sec-10ks** | Fetch financial statements from SEC 10-K filings |
+| Server | URL | Purpose |
+|--------|-----|---------|
+| **dolt** | `https://bus-mgmt-databases.mcp.mathplosion.com/mcp-dolt-database/sse` | Read/write the BusMgmtBenchmarks Dolt database |
 
-### Using MCP Servers
+### Using the Dolt MCP
 
-**In Crush:** Tools are already available. Use them directly:
-```bash
-mcp_dolt_read_query(sql="SELECT * FROM company_info", db_string="calvinw/BusMgmtBenchmarks/main")
-mcp_mcp_yfinance_10ks_process_financial_data_from_yahoo(company_name="Walmart", ticker_symbol="WMT")
-mcp_mcp_sec_10ks_process_financial_data_from_sec(company_name="Walmart", year=2024, cik="104169")
+**In Claude Code / Codex / other tools with MCP tools exposed in-session:**
+
 ```
-
-**In Codex / Claude Code / other tools with MCP tools exposed in-session:** Call the MCP tools directly. Do **not** route through `crush` or another CLI wrapper unless the user explicitly asks for that tool.
-
-Examples in Codex:
-```text
 mcp__dolt__read_query(db_string="calvinw/BusMgmtBenchmarks/main", sql="SELECT * FROM company_info")
-mcp__mcp_yfinance_10ks__process_financial_data_from_yahoo(company_name="Walmart", ticker_symbol="WMT")
-mcp__mcp_sec_10ks__process_financial_data_from_sec(company_name="Walmart", year=2024, cik="104169")
+mcp__dolt__write_query(db_string="calvinw/BusMgmtBenchmarks/main", sql="INSERT INTO ...")
+mcp__dolt__list_tables(db_string="calvinw/BusMgmtBenchmarks/main")
 ```
 
-**Important:** The presence of MCP URLs in generated config files only means the endpoints are configured. Some CLIs, including `crush`, may still need a separate model/provider login before they can be used as an MCP bridge. If direct MCP tools are available in the session, prefer them.
+**In Crush:**
+
+```
+mcp_dolt_read_query(sql="SELECT * FROM company_info", db_string="calvinw/BusMgmtBenchmarks/main")
+```
+
+### Adding More MCP Servers
+
+Edit `configs/mcp-urls.conf` — add one line per server in `name=url` format:
+
+```
+my-server=https://my-server.example.com/mcp/sse
+```
+
+All setup scripts read this file. On the next Codespace boot (or after running `bash .devcontainer/post-create.sh` manually), every AI tool will have the new server registered.
 
 ---
 
-## Core Skills & Workflows
+## Skill
 
-### 1. `/analyze-financials TICKER YEAR`
+### `/roa-analysis TICKER1 TICKER2 YEAR`
 
-**Purpose:** Fetch financial statements from SEC and Yahoo Finance, compare them side-by-side, detect anomalies, and produce reconciled values.
+**Purpose:** Compare two companies using the DuPont ROA breakdown.
 
-**Full workflow:** See `.claude/skills/analyze-financials/SKILL.md`
+**Full workflow:** See `.skillshare/skills/roa-analysis/SKILL.md`
 
-**Key inputs:**
-- `TICKER` — stock ticker (e.g., `WMT`, `M`, `TRR`)
-- `YEAR` — fiscal year (e.g., `2024`)
+**Inputs:**
+- `TICKER1`, `TICKER2` — stock tickers (e.g. `WMT`, `M`, `COST`)
+- `YEAR` — fiscal year as stored in the database (e.g. `2024`)
 
-**Key outputs:**
-1. Reconciled financial data (13 fields) ready for insertion
-2. Markdown report saved to `reports/{TICKER}-{YEAR}.md`
-3. Signal to proceed with `/insert-financials` if all checks pass
-
-**Example:**
-```
-/analyze-financials WMT 2024
-```
-
-### 2. `/insert-financials TICKER YEAR`
-
-**Purpose:** Generate a SQL `REPLACE INTO` statement to insert reconciled financial data into the Dolt database.
-
-**Full workflow:** See `.claude/skills/insert-financials/SKILL.md`
-
-**Key inputs:**
-- Must be run AFTER `/analyze-financials` in the same session
-- Uses reconciled values from analyze-financials output
-
-**Key outputs:**
-1. SQL file written to `extract/2026/inserts/{TICKER}_{YEAR}_insert.sql`
-2. Instructions for manually applying to local Dolt clone
-3. Does NOT connect to or write to any database — purely generates a file
+**What it does:**
+1. Queries `company_info` for both tickers to get company names
+2. Queries `financials` for both companies for the given year
+3. Calculates: Net Profit Margin % × Asset Turnover = ROA %
+4. Displays a side-by-side financial summary and ROA breakdown table
+5. Interprets results in plain English
 
 **Example:**
 ```
-/insert-financials WMT 2024
+/roa-analysis WMT M 2024
 ```
+
+### Adding More Skills
+
+Create a new folder under `.skillshare/skills/` with a `SKILL.md` file:
+
+```
+.skillshare/skills/
+└── my-skill/
+    └── SKILL.md    ← skill definition with frontmatter + workflow steps
+```
+
+The `SKILL.md` frontmatter must include `name` and `description`. The `description` is what the AI uses to decide when to invoke the skill.
 
 ---
 
 ## Database Schema
 
-The Dolt database `calvinw/BusMgmtBenchmarks/main` contains (at minimum):
+The Dolt database `calvinw/BusMgmtBenchmarks/main` contains:
 
 ### `company_info` table
-```sql
-SELECT company, CIK, display_name, ticker_symbol
-FROM company_info
-WHERE ticker_symbol = 'WMT'
-```
 
-**Fields used in analyze-financials:**
-- `company` — exact company name as stored in DB (matches `company_name` in financials table)
-- `CIK` — SEC Central Index Key (NULL for non-US companies)
-- `display_name` — formatted name for reports
-- `ticker_symbol` — stock ticker
+| Field | Notes |
+|-------|-------|
+| company | Exact company name (used as foreign key in financials) |
+| CIK | SEC Central Index Key (NULL for non-US companies) |
+| display_name | Formatted name for display |
+| ticker_symbol | Stock ticker |
 
 ### `financials` table
-```sql
-SELECT * FROM financials 
-WHERE company_name = 'Walmart' AND year = 2024
-```
 
-**13 required fields** (all in thousands of dollars):
+Key fields used by `/roa-analysis` (all dollar values in thousands):
 
-| Field | Type | Notes |
-|-------|------|-------|
-| company_name | STRING | Exact match of `company_info.company` |
-| year | INT | Fiscal year (e.g., 2024) |
-| reportDate | STRING | Fiscal year-end date (e.g., '2024-12-31') |
-| Net Revenue | INT | Annual total net sales |
-| Cost of Goods | INT | Positive value |
-| Gross Margin | INT | Calculated: Revenue − COGS |
-| SGA | INT | Selling, General & Administrative |
-| Operating Profit | INT | Can be negative |
-| Net Profit | INT | Bottom line; can be negative |
-| Inventory | INT or NULL | NULL for marketplace companies |
-| Current Assets | INT | |
-| Total Assets | INT | |
-| Current Liabilities | INT | |
-| Liabilities | INT | Calculated: Total Assets − Total Shareholder Equity |
-| Total Shareholder Equity | INT | Can be negative |
-| Total Liabilities and Shareholder Equity | INT | Must equal Total Assets |
+| Field | Notes |
+|-------|-------|
+| company_name | Matches `company_info.company` |
+| year | Fiscal year label (e.g. 2024) |
+| reportDate | Fiscal year-end date (e.g. 2024-01-31) |
+| Net Revenue | Total annual sales |
+| Cost of Goods | Cost of products sold |
+| Gross Margin | Net Revenue − Cost of Goods |
+| SGA | Selling, General & Administrative expenses |
+| Operating Profit | Gross Margin − SGA |
+| Net Profit | Bottom line (can be negative) |
+| Total Assets | Total assets on balance sheet |
 
 ---
 
-## Financial Data Rules & Anomaly Detection
+## How the MCP Setup Works
 
-### Critical Rules
+This is the core pattern of the repository. Understanding it lets you add MCPs or adapt the setup to other tools.
 
-Read `.claude/skills/analyze-financials/references/anomaly-rules.md` for complete details.
+### Single Source of Truth
 
-**SGA Composite (most error-prone):**
-1. **Rule 1** — Add Marketing to SGA if both reported separately (traditional retailers)
-2. **Rule 2** — EXCLUDE platform/ops-tech costs for marketplace companies (e.g., TheRealReal's `real_OperationsAndTechnologyExpense`)
-3. **Rule 3** — Don't trust Yahoo SGA if it equals Total Operating Expenses (likely aggregated)
-4. **Rule 4** — Sum G&A + Selling if no combined tag exists
+`configs/mcp-urls.conf` is the only file you need to edit to add or change MCP servers:
 
-**Balance Sheet Identity [ERROR if fails]:**
-- `Total Assets` must equal `Total Liabilities and Shareholder Equity` (±$1K rounding)
+```
+# name=url format, one per line
+dolt=https://bus-mgmt-databases.mcp.mathplosion.com/mcp-dolt-database/sse
+```
 
-**Derived Fields (calculate; don't trust sources):**
-- `Gross Margin` = Net Revenue − Cost of Goods
-- `Liabilities` = Total Assets − Total Shareholder Equity
+### Per-Tool Setup Scripts
 
-**Restatement Rule:**
-- Always use the most recent filing version for any given year
-- If newer filing contains restated prior-year numbers, flag as `[WARNING]` and note discrepancies
+Each AI tool has a setup script in `scripts/` that reads `mcp-urls.conf` and generates a tool-specific config:
 
-**Inventory Rule:**
-- Set `Inventory = NULL` for pure marketplace/consignment companies only (e.g., TheRealReal, ASOS marketplace)
-- For traditional retailers, NULL or zero is `[ERROR]` — investigate
+| Script | What it generates |
+|--------|------------------|
+| `setup-claude.sh` | `.claude/settings.json` (SSE transport) |
+| `setup-codex.sh` | `.codex/config.toml` (stdio via supergateway bridge) |
+| `setup-copilot.sh` | `.copilot/mcp-config.json` |
+| `setup-gemini.sh` | `.gemini/settings.json` |
+| `setup-opencode.sh` | `.opencode/opencode.json` |
+| `setup-crush.sh` | `.crush.json` |
 
-### Company-Specific Patterns
+Generated configs are gitignored — they are rebuilt on every Codespace boot from the checked-in source files.
 
-See `.claude/skills/analyze-financials/references/company-notes.md` for per-company quirks.
+### Why Codex is Different
 
-**Example — TheRealReal (TRR):**
-- Marketplace company: set `Inventory = NULL`
-- SGA = SGA line + Marketing line, but EXCLUDE platform costs
-- FY2024: Correct SGA = $243,000K (wrong value if including ops costs: $503,564K)
-- Negative shareholder equity is expected
+Codex cannot use SSE endpoints directly. `setup-codex.sh` installs `supergateway` (an npm package) locally at `.codex-tools/supergateway/` and generates a config that wraps each SSE URL as a stdio subprocess. This happens automatically — you do not need to do anything special.
 
-**Example — Macy's (M):**
-- Department store: gross margin ~35–45%
-- Fiscal year ends late January (not Dec 31)
-- Single combined SGA line — use directly without adjustment
+### Reference Configs
 
-**Example — Walmart (WMT):**
-- Discount retailer: gross margin ~10–30%
-- Fiscal year ends late January
-- Single combined SGA line
+`configs/` contains checked-in reference versions of each tool's config. These are used by the setup scripts as templates and are the source of truth for what MCP servers are configured:
+
+```
+configs/
+├── mcp-urls.conf          ← SOURCE OF TRUTH — edit this to add MCPs
+├── claude/settings.json   ← Reference Claude config
+├── copilot/mcp-config.json
+├── gemini/settings.json
+└── opencode/opencode.json
+```
+
+### Boot Sequence
+
+`.devcontainer/post-create.sh` runs on Codespace start:
+
+1. `setup-env.sh` — environment bootstrap
+2. `sync-skills.sh` — copy skills from `.skillshare/` to each tool
+3. `setup-codex.sh` — install supergateway + generate Codex config
+4. `setup-claude.sh` — generate Claude config + register MCPs via CLI
+5. `setup-crush.sh` — generate Crush config
+6. `setup-copilot.sh` — Copilot setup
+7. `setup-gemini.sh` — Gemini setup
+8. `setup-opencode.sh` — OpenCode setup
+
+To re-run manually after making changes:
+
+```bash
+bash .devcontainer/post-create.sh
+```
 
 ---
 
@@ -195,237 +193,48 @@ See `.claude/skills/analyze-financials/references/company-notes.md` for per-comp
 ```
 .
 ├── README.md                          # Project overview
-├── AGENTS.md                          # This file
-├── .crush.json                        # Generated by setup-crush.sh (gitignored)
+├── AGENTS.md                          # This file — technical reference
+├── CLAUDE.md                          # Claude Code behavior rules
+├── CODEX_MCP_NOTES.md                 # Notes on the Codex supergateway bridge
 ├── configs/
-│   ├── claude/
-│   │   └── settings.json              # Reference Claude MCP config
-│   ├── codex/
-│   │   └── config.toml                # Source-of-truth Codex config
-│   ├── copilot/
-│   │   └── mcp-config.json            # Reference Copilot MCP config
-│   ├── gemini/
-│   │   └── settings.json              # Reference Gemini MCP config
-│   ├── opencode/
-│   │   └── opencode.json              # Reference OpenCode MCP config
-│   └── mcp-urls.conf                  # Shared MCP endpoint list in name=url format
+│   ├── mcp-urls.conf                  # ← EDIT THIS to add/change MCP servers
+│   ├── claude/settings.json           # Reference Claude config
+│   ├── copilot/mcp-config.json        # Reference Copilot config
+│   ├── gemini/settings.json           # Reference Gemini config
+│   └── opencode/opencode.json         # Reference OpenCode config
+├── .skillshare/
+│   ├── config.yaml                    # Skillshare targets (all tools)
+│   └── skills/
+│       └── roa-analysis/
+│           └── SKILL.md               # ROA analysis skill definition
 ├── .devcontainer/
 │   ├── devcontainer.json              # Codespace config
-│   └── post-create.sh                 # Auto-setup MCP servers on boot
+│   └── post-create.sh                 # Boot orchestrator
+├── scripts/
+│   ├── setup-env.sh
+│   ├── setup-claude.sh
+│   ├── setup-codex.sh
+│   ├── setup-copilot.sh
+│   ├── setup-crush.sh
+│   ├── setup-gemini.sh
+│   ├── setup-opencode.sh
+│   └── sync-skills.sh
 ├── .claude/                           # Generated by setup-claude.sh (gitignored)
+├── .codex/                            # Generated by setup-codex.sh (gitignored)
+├── .codex-tools/                      # supergateway local install (gitignored)
 ├── .copilot/                          # Generated by setup-copilot.sh (gitignored)
-├── .opencode/                         # Generated by setup-opencode.sh (gitignored)
 ├── .gemini/                           # Generated by setup-gemini.sh (gitignored)
-├── .skillshare/
-│   ├── config.yaml                    # Skillshare (cross-tool skill sharing) config
-│   └── skills/                        # Replicated skills for non-Crush tools
-├── reports/                           # Generated financial reports
-│   ├── M-2020.md                      # Example: Macy's FY2020
-│   ├── M-2021.md
-│   ├── WMT-2022.md
-│   └── ...
-└── extract/2026/inserts/              # Generated SQL files (created by /insert-financials)
-    ├── WMT_2024_insert.sql
-    └── ...
+├── .opencode/                         # Generated by setup-opencode.sh (gitignored)
+└── .crush.json                        # Generated by setup-crush.sh (gitignored)
 ```
 
 ---
 
-## Common Workflows
+## Quick Reference for New Agents
 
-### Workflow 1: Validate & Add Financial Data for a Company
-
-1. **Trigger:** User asks to fetch/validate/add financials for a company
-2. **Run:** `/analyze-financials TICKER YEAR`
-   - Fetches SEC 10-K and Yahoo Finance side-by-side
-   - Applies anomaly detection rules
-   - Produces reconciled values
-   - Saves report to `reports/{TICKER}-{YEAR}.md`
-3. **Review:** Check flags and reconciliation table
-4. **Insert:** If ready, run `/insert-financials TICKER YEAR`
-   - Generates SQL file to `extract/2026/inserts/{TICKER}_{YEAR}_insert.sql`
-5. **Apply (manual):** User applies SQL to their local Dolt clone:
-   ```bash
-   cd /path/to/dolt/BusMgmtBenchmarks
-   dolt sql < /path/to/extract/2026/inserts/{TICKER}_{YEAR}_insert.sql
-   dolt diff && dolt commit -am "Add {company_name} FY{YEAR} financials" && dolt push
-   ```
-
-### Workflow 2: Debug Anomaly in Financial Data
-
-1. **Look up the company** in `company-notes.md` for known quirks
-2. **Check anomaly rules** in `anomaly-rules.md` for the relevant rule (SGA, balance sheet, inventory, etc.)
-3. **Query the database** to inspect existing data:
-   ```sql
-   SELECT * FROM financials WHERE company_name = 'TheRealReal' AND year = 2024
-   ```
-4. **Review the filing** (SEC or Yahoo) for the raw values
-5. **Apply the rule** and reconcile
-6. **Add notes** to `company-notes.md` if a new pattern emerges
-
-### Workflow 3: Check if a Company Exists in the Database
-
-```sql
-SELECT company, ticker_symbol, CIK FROM company_info WHERE ticker_symbol = 'WMT'
-```
-
-If CIK is NULL, the company is non-US and has no SEC filing — skip SEC fetch in analyze-financials.
-
----
-
-## Key Gotchas & Patterns
-
-### Gotcha 1: SGA is Composite — Never Trust a Single Source
-
-SGA (Selling, General & Administrative) is reported differently by different companies and sources. The analyze-financials skill handles four common patterns, but always:
-
-1. Compare SEC and Yahoo side-by-side
-2. Apply Rule 1–4 from `anomaly-rules.md`
-3. Flag warnings if sources disagree
-4. Check `company-notes.md` for known patterns
-
-### Gotcha 2: Yahoo Finance Data is Limited
-
-- Yahoo typically provides **only the last 4 years** of data (fiscal years ending ~Jan–Dec 2022–2025)
-- Older years (e.g., FY2020) are not available from Yahoo
-- This is expected and flagged in analyze-financials output
-
-### Gotcha 3: Fiscal Year Dates Are Company-Specific
-
-- Most US retailers have **fiscal year ends in late January** (not Dec 31)
-- Examples: Walmart, Macy's, Target (FY2024 ends ~Jan 31, 2024)
-- `reportDate` must reflect the actual fiscal year-end, not a rounded date
-
-### Gotcha 4: Non-US Companies Have No SEC Data
-
-Companies listed in `company-notes.md` (Louis Vuitton, H&M, Adidas, etc.) are non-US:
-- `CIK` is NULL in `company_info`
-- Skip the SEC fetch; use Yahoo only
-- Flag in the analysis that SEC is unavailable
-
-### Gotcha 5: Negative Equity is Valid (But Must Be Confirmed)
-
-Some companies (e.g., TheRealReal, heavily leveraged retailers) have **negative Total Shareholder Equity**. This is not an error — it reflects high debt relative to assets. Always flag it as `[WARNING]` and confirm before inserting.
-
-### Gotcha 6: Inventory = NULL for Marketplace Companies Only
-
-- **Pure marketplace/consignment companies** (TheRealReal, ASOS marketplace segment) carry no physical inventory → set `Inventory = NULL`
-- **Traditional retailers** must have a positive inventory value → NULL or zero is `[ERROR]`
-
-### Gotcha 7: Balance Sheet Identity is Non-Negotiable
-
-`Total Assets` must equal `Total Liabilities and Shareholder Equity` (within ±$1K rounding). If they don't match, the extraction from the filing was incorrect — **do not insert** until resolved.
-
-### Gotcha 8: Restatement vs. Original Filing
-
-Later 10-K filings often restate prior-year numbers (e.g., the 2024 10-K contains FY2023 comparatives that differ from the 2023 10-K). Always use the most recent filing version.
-
----
-
-## Commands & Tools
-
-### Crush Commands
-
-These are optional examples for users who are intentionally working inside `crush`. They are **not** the preferred path for Codex agents when direct MCP tools are available.
-
-**Important:** `crush` CLI subcommands and MCP invocation syntax may vary by version and provider setup. Do not assume `crush query` / `crush fetch` wrappers exist. If direct MCP tools are available in the session, use them instead.
-
-### Git Workflow
-
-**Check status:**
-```bash
-cd /workspaces/bus-mgmt-benchmarks-dolt-db && git status
-```
-
-**View recent commits:**
-```bash
-git log --oneline -10
-```
-
-**Commit generated SQL files (after testing in local Dolt clone):**
-```bash
-git add extract/2026/inserts/ reports/
-git commit -m "Add financial data for {TICKER} FY{YEAR}"
-```
-
-### Setup
-
-On boot, the `.devcontainer/post-create.sh` script:
-1. Runs general environment bootstrap
-2. Installs Skillshare (cross-tool skill sharing)
-3. Links Codex config from `configs/codex/config.toml`
-4. Runs per-tool setup scripts that generate config from `configs/mcp-urls.conf`
-5. Registers Claude and Codex MCP servers where CLI registration is supported
-
-To manually re-run setup:
-```bash
-bash .devcontainer/post-create.sh
-```
-
----
-
-## Testing & Validation
-
-### Validate a Financial Data Row
-
-Before inserting, verify:
-
-1. **Identity check:** `Total Assets == Total Liabilities + Shareholder Equity` (±$1K)
-2. **Gross Margin sanity:** Is it within the range for this company's retail segment?
-3. **Inventory logic:** Marketplace companies should have `Inventory = NULL`; others must have positive inventory
-4. **Negative equity:** If present, confirm it's expected (e.g., TheRealReal)
-5. **Negative net profit:** If present, confirm it's explained (e.g., restructuring charge, impairment)
-
-### Query After Inserting
-
-After running `/insert-financials` and applying the SQL to your local Dolt clone, verify:
-
-```sql
--- Confirm the new row exists
-SELECT * FROM financials WHERE company_name = 'Walmart' AND year = 2024
-
--- Check balance sheet identity
-SELECT company_name, year, 
-       `Total Assets` - (`Liabilities` + `Total Shareholder Equity`) AS imbalance
-FROM financials
-WHERE company_name = 'Walmart' AND year = 2024
--- Should be ≤ 1 (rounding)
-```
-
----
-
-## Reference Files to Read
-
-- **`.claude/skills/analyze-financials/SKILL.md`** — Complete step-by-step analyze-financials workflow
-- **`.claude/skills/analyze-financials/references/anomaly-rules.md`** — All SGA rules, balance sheet checks, restatement logic
-- **`.claude/skills/analyze-financials/references/company-notes.md`** — Per-company patterns and quirks
-- **`.claude/skills/insert-financials/SKILL.md`** — Complete step-by-step insert-financials workflow
-- **`.devcontainer/post-create.sh`** — Environment bootstrap and per-tool setup orchestration
-- **`configs/mcp-urls.conf`** — Shared MCP endpoint list used by all tool setup scripts
-- **`configs/codex/config.toml`** — Source-of-truth Codex CLI configuration
-- **`scripts/setup-codex.sh`** — Codex config linking, Bubblewrap install, and Codex MCP registration
-- **`scripts/setup-claude.sh`** — Claude config generation and MCP registration
-- **`scripts/setup-crush.sh`** — Crush config generation
-
----
-
-## Quick Checklist for New Agents
-
-- [ ] Read this file (AGENTS.md) to understand the project
-- [ ] Review `.claude/skills/analyze-financials/references/anomaly-rules.md` if working with financial data
-- [ ] Check `.claude/skills/analyze-financials/references/company-notes.md` for the specific company
-- [ ] Verify MCP servers are available: `configs/mcp-urls.conf` is checked in and tool setup scripts have been run
-- [ ] Use `/analyze-financials TICKER YEAR` to fetch and validate data
-- [ ] Use `/insert-financials TICKER YEAR` to generate SQL (after analyze-financials)
-- [ ] Apply the SQL to your local Dolt clone manually (skill doesn't write to DB)
-- [ ] Verify balance sheet identity and sanity checks before inserting
-- [ ] Save reports to `reports/{TICKER}-{YEAR}.md`
-- [ ] Commit new data to git (don't push to remote without explicit permission)
-
----
-
-## Contact & Support
-
-- **Dolt Database:** `calvinw/BusMgmtBenchmarks` on [DoltHub](https://www.dolthub.com/)
-- **MCP Servers:** Hosted at `https://bus-mgmt-databases.mcp.mathplosion.com/`
-- **Generated Reports:** Published at `https://calvinw.github.io/BusMgmtBenchmarks/reports/`
+- [ ] Read this file (AGENTS.md)
+- [ ] Check `configs/mcp-urls.conf` to confirm which MCP servers are active
+- [ ] Verify MCP tools are available in the session before calling them
+- [ ] Use `/roa-analysis TICKER1 TICKER2 YEAR` to run the ROA comparison skill
+- [ ] To add an MCP: add a line to `configs/mcp-urls.conf`, then run `bash .devcontainer/post-create.sh`
+- [ ] To add a skill: create `.skillshare/skills/your-skill/SKILL.md`

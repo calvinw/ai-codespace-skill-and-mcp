@@ -1,0 +1,95 @@
+---
+name: roa-analysis
+description: Compare two retail companies side by side using the ROA (Return on Assets) DuPont breakdown — Net Profit Margin % × Asset Turnover = ROA. Queries the Dolt database for both companies and displays a full comparison table with interpretation. Triggered by "/roa-analysis TICKER1 TICKER2 YEAR".
+---
+
+# roa-analysis
+
+Compare two companies using the DuPont ROA breakdown.
+
+## Inputs
+
+`/roa-analysis TICKER1 TICKER2 YEAR`
+
+- `TICKER1`, `TICKER2` — stock tickers of the two companies to compare (e.g. `WMT`, `M`, `COST`)
+- `YEAR` — fiscal year stored in the database (e.g. `2024`)
+
+## Step 1 — Look up both companies
+
+For each ticker, query the database for company metadata:
+
+```sql
+SELECT company, display_name, ticker_symbol
+FROM company_info
+WHERE ticker_symbol = '{TICKER}'
+```
+
+Use `db_string: calvinw/BusMgmtBenchmarks/main`.
+
+If a ticker returns no row, tell the user that company is not in the database and stop.
+
+## Step 2 — Fetch financial data for both companies
+
+For each company, run:
+
+```sql
+SELECT year, reportDate,
+       `Net Revenue`,
+       `Cost of Goods`,
+       `Gross Margin`,
+       `SGA`,
+       `Operating Profit`,
+       `Net Profit`,
+       `Total Assets`
+FROM financials
+WHERE company_name = '{company}' AND year = {YEAR}
+```
+
+If no row is returned for a company/year combination, tell the user the data is missing and stop.
+
+## Step 3 — Calculate ROA components
+
+For each company compute the following. All percentages should be rounded to two decimal places.
+
+| Metric | Formula |
+|--------|---------|
+| Net Profit Margin % | Net Profit ÷ Net Revenue × 100 |
+| Asset Turnover | Net Revenue ÷ Total Assets |
+| ROA % | Net Profit Margin % × Asset Turnover |
+
+Note: ROA % = Net Profit ÷ Total Assets × 100 (the DuPont product is equivalent).
+
+## Step 4 — Display side-by-side comparison table
+
+Present a clear table with both companies in columns. Use the display_name from company_info for column headers.
+
+### Financial Summary ($ thousands)
+
+| Metric | {Company 1} | {Company 2} |
+|--------|------------|------------|
+| Net Revenue | | |
+| Cost of Goods | | |
+| Gross Margin | | |
+| SGA | | |
+| Operating Profit | | |
+| Net Profit | | |
+| Total Assets | | |
+
+### ROA Breakdown
+
+| Metric | {Company 1} | {Company 2} |
+|--------|------------|------------|
+| Net Profit Margin % | | |
+| × Asset Turnover | | |
+| = ROA % | | |
+
+## Step 5 — Interpret the results
+
+After the tables, write a short plain-English interpretation (3–5 sentences) covering:
+
+1. Which company has a higher ROA and what that means overall
+2. Which company is more profitable per dollar of sales (higher Net Profit Margin %)
+3. Which company uses its assets more efficiently (higher Asset Turnover)
+4. What the DuPont breakdown reveals about each company's business model — for example, a discount retailer like Walmart typically has low margins but very high asset turnover, while a department store like Macy's may have higher margins but lower turnover
+
+Keep the interpretation in plain English suitable for a business student with no finance background.

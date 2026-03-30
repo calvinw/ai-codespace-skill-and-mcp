@@ -5,16 +5,6 @@
       "type": "remote",
       "url": "https://bus-mgmt-databases.mcp.mathplosion.com/mcp-dolt-database/sse",
       "enabled": true
-    },
-    "mcp-yfinance-10ks": {
-      "type": "remote",
-      "url": "https://bus-mgmt-databases.mcp.mathplosion.com/mcp-yfinance-10ks/sse",
-      "enabled": true
-    },
-    "mcp-sec-10ks": {
-      "type": "remote",
-      "url": "https://bus-mgmt-databases.mcp.mathplosion.com/mcp-sec-10ks/sse",
-      "enabled": true
     }
   }
 }

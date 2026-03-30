@@ -1,40 +1,49 @@
-# BusMgmtBenchmarks — Financial Data Codespace
+# ai-codespace-skill-and-mcp
 
-A GitHub Codespace for collecting, verifying, and loading retail company financial data into the [BusMgmtBenchmarks Dolt database](https://www.dolthub.com/repositories/calvinw/BusMgmtBenchmarks).
+A GitHub Codespace template that wires up a remote MCP server and a custom skill across every major AI coding tool — Claude Code, OpenCode, Gemini CLI, Codex, Copilot, and Crush.
 
 ## What this does
 
-Students and instructors use AI tools to fetch financial statements from SEC 10-K filings and Yahoo Finance, compare them for accuracy, and load verified data into a shared database used for retail management benchmarking.
+When you open this Codespace, all AI tools are automatically configured to connect to a shared MCP (Model Context Protocol) server. A single skill is pre-loaded that any tool can run with a slash command.
+
+This is a minimal, working example of the pattern. Swap in your own MCP URL and write your own skill to build on top of it.
 
 ## AI Tools
 
-All AI tools are pre-installed and pre-configured with MCP server connections:
-Claude Code, OpenCode, Gemini CLI, Codex, Copilot, Crush, Pi agent
+All tools are pre-installed and pre-configured:
+Claude Code, OpenCode, Gemini CLI, Codex, Copilot, Crush
 (from [ai-course-devcontainer](https://github.com/calvinw/ai-course-devcontainer))
 
-## Key Skills
-
-| Command | What it does |
-|---------|-------------|
-| `/analyze-financials TICKER YEAR` | Fetch, compare, and reconcile financial data from SEC + Yahoo Finance |
-| `/insert-financials TICKER YEAR` | Generate SQL to load reconciled data into the database |
-
-Example: `/analyze-financials WMT 2024` → `/insert-financials WMT 2024`
-
-## MCP Servers
+## MCP Server
 
 | Server | Purpose |
 |--------|---------|
-| [Dolt MCP](https://bus-mgmt-databases.mcp.mathplosion.com/mcp-dolt-database/sse) | Read/write the BusMgmtBenchmarks database |
-| mcp-yfinance-10ks | Fetch financial statements from Yahoo Finance |
-| mcp-sec-10ks | Fetch financial statements from SEC 10-K filings |
+| **dolt** | Read/write the BusMgmtBenchmarks Dolt database |
+
+Endpoint: `https://bus-mgmt-databases.mcp.mathplosion.com/mcp-dolt-database/sse`
+
+To add or change MCP servers, edit `configs/mcp-urls.conf` — all tools pick it up automatically on next boot.
+
+## Skill
+
+| Command | What it does |
+|---------|-------------|
+| `/roa-analysis TICKER1 TICKER2 YEAR` | Compare two companies side by side using the ROA DuPont breakdown |
+
+Example: `/roa-analysis WMT M 2024`
+
+The skill queries the Dolt database for both companies, calculates Net Profit Margin % × Asset Turnover = ROA, and displays a side-by-side table with plain-English interpretation.
 
 ## Getting started
 
 Open in GitHub Codespaces — all tools and MCP connections are set up automatically by `.devcontainer/post-create.sh`.
 
+## Customizing
+
+- **Add an MCP server:** Add a line to `configs/mcp-urls.conf` in `name=url` format
+- **Add a skill:** Create a folder under `.skillshare/skills/` with a `SKILL.md` file
+
 ## Documentation
 
-- [AGENTS.md](AGENTS.md) — Full technical reference for AI agents: schema, workflows, anomaly rules, gotchas
-- [CLAUDE.md](CLAUDE.md) — Claude Code behavior rules, including student communication style
-- [Published reports](https://calvinw.github.io/BusMgmtBenchmarks/reports/) — Generated financial analysis reports
+- [AGENTS.md](AGENTS.md) — Technical reference: how MCP setup works, file layout, how to add MCPs and skills
+- [CLAUDE.md](CLAUDE.md) — Claude Code behavior rules and skill usage guide
