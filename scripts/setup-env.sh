@@ -6,6 +6,5 @@ WORKSPACE_DIR="${WORKSPACE_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 
 cd "$WORKSPACE_DIR"
 
-bash "$WORKSPACE_DIR/scripts/setup-env.sh"
-bash "$WORKSPACE_DIR/scripts/sync-skills.sh"
-bash "$WORKSPACE_DIR/scripts/setup-mcps.sh"
+mkdir -p ~/.ssh && ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N '' 2>/dev/null || true
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
