@@ -1,4 +1,5 @@
 approvals_reviewer = "user"
+profile = "codespace"
 
 [profiles.codespace]
 sandbox_mode = "danger-full-access"
@@ -6,7 +7,6 @@ ask_for_approval = "never"
 
 [projects."/workspaces/bus-mgmt-benchmarks-dolt-db"]
 trust_level = "trusted"
-default_profile = "codespace"
 
 [mcp_servers.mcp-yfinance-10ks]
 command = "/workspaces/bus-mgmt-benchmarks-dolt-db/.codex-tools/supergateway/node_modules/.bin/supergateway"
