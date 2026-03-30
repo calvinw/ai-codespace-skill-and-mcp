@@ -4,9 +4,9 @@ set -e
 # Resolve paths relative to this script's location, regardless of where it's called from.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="${WORKSPACE_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
-CODEX_CONFIG_SRC="$WORKSPACE_DIR/configs/codex/config.toml"        # Checked-in source of truth
 MCP_URLS_FILE="$WORKSPACE_DIR/configs/mcp-urls.conf"               # One name=url per line
 WORKSPACE_CODEX_DIR="$WORKSPACE_DIR/.codex"
+CODEX_CONFIG="$WORKSPACE_CODEX_DIR/config.toml"                    # Generated config written here
 CODEX_MCP_BRIDGE_DIR="$WORKSPACE_DIR/.codex-tools/supergateway"    # Local npm install of supergateway
 CODEX_MCP_BRIDGE_BIN="$CODEX_MCP_BRIDGE_DIR/node_modules/.bin/supergateway"
 
@@ -33,34 +33,10 @@ fi
 
 mkdir -p "$WORKSPACE_CODEX_DIR" ~/.codex
 
-# Link the checked-in config.toml into both the workspace .codex dir and the user home dir.
-# Using symlinks means edits to configs/codex/config.toml take effect without re-running setup.
-if [ -f "$CODEX_CONFIG_SRC" ]; then
-  ln -sf "$CODEX_CONFIG_SRC" "$WORKSPACE_CODEX_DIR/config.toml"
-  ln -sf "$CODEX_CONFIG_SRC" ~/.codex/config.toml
-fi
-
-# Verify the config was linked and that the expected codespace profile is active.
-# The codespace profile sets sandbox_mode=danger-full-access and ask_for_approval=never,
-# which lets Codex run autonomously inside the Codespace without prompting for every action.
-if [ -f ~/.codex/config.toml ]; then
-  echo "Codex config linked: ~/.codex/config.toml -> $(readlink -f ~/.codex/config.toml)"
-  if grep -q 'profile = "codespace"' ~/.codex/config.toml && \
-     grep -q 'sandbox_mode = "danger-full-access"' ~/.codex/config.toml && \
-     grep -q 'ask_for_approval = "never"' ~/.codex/config.toml; then
-    echo "Codex default profile verified: codespace (danger-full-access, ask_for_approval=never)"
-  else
-    echo "WARNING: Codex config found, but the expected codespace profile defaults were not detected."
-  fi
-else
-  echo "WARNING: ~/.codex/config.toml was not created."
-fi
-
-# Codex does not natively support SSE-based MCP servers, so we use supergateway as a bridge.
-# supergateway wraps an SSE endpoint and exposes it as a stdio subprocess that Codex can spawn.
-# We install it locally under .codex-tools/supergateway rather than globally to keep the
-# workspace self-contained and reproducible.
-if command -v codex >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+# Install supergateway first — its binary path is written into the generated config below.
+# Codex does not natively support SSE-based MCP servers, so supergateway acts as a bridge:
+# it wraps an SSE endpoint and exposes it as a stdio subprocess that Codex can spawn.
+if command -v npm >/dev/null 2>&1; then
   if [ ! -x "$CODEX_MCP_BRIDGE_BIN" ]; then
     mkdir -p "$CODEX_MCP_BRIDGE_DIR"
     if [ ! -f "$CODEX_MCP_BRIDGE_DIR/package.json" ]; then
@@ -77,14 +53,58 @@ EOF
     fi
     npm install --prefix "$CODEX_MCP_BRIDGE_DIR" >/dev/null 2>&1
   fi
+fi
 
-  # Register each MCP server with Codex via `codex mcp add`, passing the supergateway binary
-  # as the command. Codex will spawn supergateway as a subprocess; supergateway connects
-  # to the SSE URL and translates the protocol. Errors are suppressed — duplicate registrations
-  # are harmless and the command may not exist in all environments.
-  while IFS='=' read -r name url; do
-    [ -z "$name" ] && continue
-    case "$name" in \#*) continue ;; esac
-    codex mcp add "$name" -- "$CODEX_MCP_BRIDGE_BIN" --sse "$url" --logLevel none 2>/dev/null || true
-  done < "$MCP_URLS_FILE"
+# Remove any existing symlink or file at the target paths before generating.
+rm -f "$CODEX_CONFIG" ~/.codex/config.toml
+
+# Generate .codex/config.toml from the current workspace path and mcp-urls.conf.
+# This replaces the previous approach of symlinking a checked-in config.toml, which
+# hardcoded both the workspace path and the MCP server URLs.
+{
+  echo 'approvals_reviewer = "user"'
+  echo 'profile = "codespace"'
+  echo ''
+  echo '[profiles.codespace]'
+  echo 'sandbox_mode = "danger-full-access"'
+  echo 'ask_for_approval = "never"'
+  echo ''
+  echo "[projects.\"$WORKSPACE_DIR\"]"
+  echo 'trust_level = "trusted"'
+  echo ''
+  echo '[plugins."gmail@openai-curated"]'
+  echo 'enabled = true'
+  echo ''
+  echo '[plugins."github@openai-curated"]'
+  echo 'enabled = true'
+  if [ -x "$CODEX_MCP_BRIDGE_BIN" ] && [ -f "$MCP_URLS_FILE" ]; then
+    while IFS='=' read -r name url; do
+      [ -z "$name" ] && continue
+      case "$name" in \#*) continue ;; esac
+      echo ''
+      echo "[mcp_servers.$name]"
+      echo "command = \"$CODEX_MCP_BRIDGE_BIN\""
+      echo "args = [\"--sse\", \"$url\", \"--logLevel\", \"none\"]"
+    done < "$MCP_URLS_FILE"
+  fi
+} > "$CODEX_CONFIG"
+
+# Symlink the generated config into the user home dir so Codex finds it
+# regardless of which directory it's launched from.
+ln -sf "$CODEX_CONFIG" ~/.codex/config.toml
+
+# Verify the config was created and the expected codespace profile is present.
+# The codespace profile sets sandbox_mode=danger-full-access and ask_for_approval=never,
+# which lets Codex run autonomously inside the Codespace without prompting for every action.
+if [ -f ~/.codex/config.toml ]; then
+  echo "Codex config generated: $CODEX_CONFIG"
+  if grep -q 'profile = "codespace"' ~/.codex/config.toml && \
+     grep -q 'sandbox_mode = "danger-full-access"' ~/.codex/config.toml && \
+     grep -q 'ask_for_approval = "never"' ~/.codex/config.toml; then
+    echo "Codex default profile verified: codespace (danger-full-access, ask_for_approval=never)"
+  else
+    echo "WARNING: Codex config found, but the expected codespace profile defaults were not detected."
+  fi
+else
+  echo "WARNING: ~/.codex/config.toml was not created."
 fi
