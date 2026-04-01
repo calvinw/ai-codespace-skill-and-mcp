@@ -10,6 +10,4 @@ if ! command -v skillshare >/dev/null 2>&1; then
   curl -fsSL https://raw.githubusercontent.com/runkids/skillshare/main/install.sh | sh
 fi
 
-skillshare sync
-
-echo "Skills synced via skillshare."
+skillshare sync > /dev/null 2>&1
